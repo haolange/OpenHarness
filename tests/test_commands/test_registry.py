@@ -204,6 +204,34 @@ async def test_diff_command_supports_explicit_remote_admin_opt_in(tmp_path: Path
 
 
 @pytest.mark.asyncio
+async def test_project_context_commands_are_marked_local_only(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPENHARNESS_CONFIG_DIR", str(tmp_path / "config"))
+    registry = create_default_command_registry()
+
+    for payload in (
+        "/issue set Remote supplied issue :: marker",
+        "/pr_comments add src/app.py:1 :: marker",
+    ):
+        command, _ = registry.lookup(payload)
+        assert command is not None
+        assert command.remote_invocable is False, payload
+
+
+@pytest.mark.asyncio
+async def test_project_context_commands_support_explicit_remote_admin_opt_in(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPENHARNESS_CONFIG_DIR", str(tmp_path / "config"))
+    registry = create_default_command_registry()
+
+    for payload in (
+        "/issue set Remote supplied issue :: marker",
+        "/pr_comments add src/app.py:1 :: marker",
+    ):
+        command, _ = registry.lookup(payload)
+        assert command is not None
+        assert getattr(command, "remote_admin_opt_in", False) is True, payload
+
+
+@pytest.mark.asyncio
 async def test_tasks_command_is_marked_local_only(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPENHARNESS_CONFIG_DIR", str(tmp_path / "config"))
     registry = create_default_command_registry()
@@ -235,6 +263,9 @@ async def test_sensitive_control_plane_commands_are_local_only(tmp_path: Path, m
         "/model show",
         "/commit remote requested commit",
         "/ship",
+        "/resume",
+        "/resume session-from-another-sender",
+        "/summary 10",
     ):
         command, _ = registry.lookup(payload)
         assert command is not None
@@ -1124,7 +1155,9 @@ async def test_agents_session_files_and_reload_plugins_commands(tmp_path: Path, 
     (tmp_path / "src" / "app.py").write_text("print('hi')\n", encoding="utf-8")
 
     session_command, session_args = registry.lookup("/session")
+    context.session_id = "session-smoke"
     session_result = await session_command.handler(session_args, context)
+    assert "Session ID: session-smoke" in session_result.message
     assert "Session directory:" in session_result.message
 
     session_path_command, session_path_args = registry.lookup("/session path")
